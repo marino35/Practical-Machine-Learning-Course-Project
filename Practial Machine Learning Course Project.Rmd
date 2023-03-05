@@ -1,0 +1,151 @@
+# Regression Analysis Week 4 Course Project by Metehan Soysal
+
+## Context & Objective
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.
+
+## Data Processing
+
+### Download & Read Data
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+```{r}
+library(ggplot2); library(caret);library(rattle);library(kernlab)
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training_file <- "./pml-training.csv"
+testing_file <- "./pml-testing.csv"
+
+if (!file.exists(training_file)) {
+        download.file(train_url, destfile=training_file, method="curl")
+}
+if (!file.exists(testing_file)) {
+        download.file(testing_url, destfile=testing_file, method="curl")
+}
+training_rawdata <- read.csv(training_file)
+testing_rawdata <- read.csv(testing_file)
+dim(training_rawdata)
+dim(testing_rawdata)
+```
+
+## Prepare the Data
+### Cleaning the Data
+One of the first thing we will do is to clean the data by removing the X variable which has an ID.
+```{r}
+training_rawdata <- training_rawdata[,-1]
+testing_rawdata <- testing_rawdata[,-1]
+```
+Next, we will reduce the variables by using nearZeroVar function.
+```{r}
+nzv <- nearZeroVar(training_rawdata)
+training_cleandata <- training_rawdata[,-nzv]
+testing_cleandata <- testing_rawdata[,-nzv]
+dim(training_cleandata)
+dim(testing_cleandata)
+```
+Next, we will do variables that has mostly NA value in them.
+```{r}
+training_cleandata <- training_cleandata[,colMeans(is.na(training_cleandata)) == 0]
+testing_cleandata <- testing_cleandata[,colMeans(is.na(testing_cleandata)) == 0]
+dim(training_cleandata)
+dim(testing_cleandata)
+```
+Next we will clean the variables that has metadata.
+```{r}
+training_cleandata <- training_cleandata[,-c(1:5)]
+testing_cleandata <- testing_cleandata[,-c(1:5)]
+dim(training_cleandata)
+dim(testing_cleandata)
+```
+## Building a Model
+### Separating Training Data
+We will now separate the training data into 2 slices and use it to train and validate the model.
+```{r}
+intrain <- createDataPartition(training_cleandata$classe, p = 0.7, list = FALSE)
+sub_train <- training_cleandata[intrain,]
+valid_train <- training_cleandata[-intrain,]
+```
+
+### Creating the Models
+We will be creating 4 models (decision tree, random forest, support vector machines, gradient boosted trees) and test the accuracy of these models by using the sub_train and valid_train data sets before applying this to the testing_cleandata set.
+
+We will use 5-fold cross validation.
+```{r}
+control <- trainControl(method = "cv", number = 5, verboseIter = FALSE)
+```
+#### Model - Decision Tree
+```{r}
+model_dec_tree <- train(classe ~ ., data = sub_train, method = "rpart", trControl = control)
+fancyRpartPlot(model_dec_tree$finalModel)
+```
+Next, we will predict and validate the prediction results.
+```{r}
+pred_dec_tree <- predict(model_dec_tree, valid_train)
+cm_dec_tree <- confusionMatrix(pred_dec_tree, factor(valid_train$classe))
+cm_dec_tree
+```
+
+As the result suggests the accuracy of this model is **`r cm_dec_tree$overall[[1]]`**.
+
+#### Model Random Forest
+```{r}
+model_rf <- train(classe ~ ., data = sub_train, method = "rf", trControl = control)
+```
+Next, we will predict and validate the prediction results.
+```{r}
+pred_rf <- predict(model_rf, valid_train)
+cm_rf <- confusionMatrix(pred_rf, factor(valid_train$classe))
+cm_rf
+```
+As the result suggests the accuracy of this model is **`r cm_rf$overall[[1]]`**.
+
+#### Model Support Vector Machines
+```{r}
+model_svm <- train(classe ~ ., data = sub_train, method = "svmLinear", trControl = control)
+```
+Next, we will predict and validate the prediction results.
+```{r}
+pred_svm <- predict(model_svm, valid_train)
+cm_svm <- confusionMatrix(pred_svm, factor(valid_train$classe))
+cm_svm
+```
+As the result suggests the accuracy of this model is **`r cm_svm$overall[[1]]`**.
+
+#### Model Gradient Boosted Trees
+```{r}
+model_gbt <- train(classe ~ ., data = sub_train, method = "gbm", trControl = control, verbose = FALSE)
+```
+Next, we will predict and validate the prediction results.
+```{r}
+pred_gbt <- predict(model_gbt, valid_train)
+cm_gbt <- confusionMatrix(pred_gbt, factor(valid_train$classe))
+cm_gbt
+```
+As the result suggests the accuracy of this model is **`r cm_gbt$overall[[1]]`**.
+
+### Model Results & Selection
+Based on the results Random Forest provides the best accuracy with **`r cm_rf$overall[[1]]`**.
+We will use this model to predict the Classe for the testing set that was put aside.
+```{r}
+pred_test <- predict(model_rf, testing_cleandata)
+pred_test
+```
+
+## Appendix
+Plots can be found below.
+```{r}
+plot(model_dec_tree)
+plot(model_rf)
+plot(model_gbt)
+```
+
+
